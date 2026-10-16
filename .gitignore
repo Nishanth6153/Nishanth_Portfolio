@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.local
 .DS_Store
+_baseline/
+reference/
+_argon_rewrite_src/
+*.zip
