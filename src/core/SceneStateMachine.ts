@@ -1,84 +1,70 @@
-export type CameraViewMode = 'wide' | 'desk';
-export type CameraState = CameraViewMode;
+/**
+ * Minimal typed scene state retained for the existing portfolio prototype.
+ * This milestone exposes only the approved room and desk camera presets.
+ */
+
+export type CameraState = 'room' | 'desk'
+
+export type OverlayState =
+  | 'none'
+  | 'credits'
+
+export type ContentState =
+  | 'none'
+  | 'about'
+  | 'work'
+  | 'posts'
+  | 'online'
 
 export interface SceneState {
-  viewMode: CameraViewMode;
-  isTransitioning: boolean;
-  reducedMotion: boolean;
-  crtPowered: boolean;
+  camera: CameraState
+  overlay: OverlayState
+  content: ContentState
+  isTransitioning: boolean
 }
 
-type Listener = (state: SceneState) => void;
+export type SceneAction =
+  | { type: 'GO_ROOM' }
+  | { type: 'GO_DESK' }
+  | { type: 'OPEN_CONTENT'; content: ContentState }
+  | { type: 'CLOSE_CONTENT' }
+  | { type: 'OPEN_CREDITS' }
+  | { type: 'CLOSE_CREDITS' }
+  | { type: 'TRANSITION_START' }
+  | { type: 'TRANSITION_END' }
+  | { type: 'ESC' }
 
-class SceneStateMachineStore {
-  private state: SceneState = {
-    viewMode: 'wide',
-    isTransitioning: false,
-    reducedMotion:
-      typeof window !== 'undefined'
-        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        : false,
-    crtPowered: true,
-  };
-
-  private listeners: Set<Listener> = new Set();
-
-  constructor() {
-    if (typeof window !== 'undefined') {
-      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-      const handleChange = (e: MediaQueryListEvent) => {
-        this.setState({ reducedMotion: e.matches });
-      };
-      mediaQuery.addEventListener?.('change', handleChange);
-    }
-  }
-
-  public getState(): SceneState {
-    return this.state;
-  }
-
-  public setState(partial: Partial<SceneState>): void {
-    const nextState = { ...this.state, ...partial };
-    const changed =
-      nextState.viewMode !== this.state.viewMode ||
-      nextState.isTransitioning !== this.state.isTransitioning ||
-      nextState.reducedMotion !== this.state.reducedMotion ||
-      nextState.crtPowered !== this.state.crtPowered;
-
-    if (changed) {
-      this.state = nextState;
-      this.listeners.forEach((listener) => listener(this.state));
-    }
-  }
-
-  public setViewMode(mode: CameraViewMode): void {
-    if (this.state.viewMode === mode) return;
-    this.setState({
-      viewMode: mode,
-      isTransitioning: !this.state.reducedMotion,
-    });
-  }
-
-  public toggleViewMode(): void {
-    this.setViewMode(this.state.viewMode === 'wide' ? 'desk' : 'wide');
-  }
-
-  public completeTransition(): void {
-    if (this.state.isTransitioning) {
-      this.setState({ isTransitioning: false });
-    }
-  }
-
-  public toggleCrtPower(): void {
-    this.setState({ crtPowered: !this.state.crtPowered });
-  }
-
-  public subscribe(listener: Listener): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
+export const INITIAL_STATE: SceneState = {
+  camera: 'room',
+  overlay: 'none',
+  content: 'none',
+  isTransitioning: false,
 }
 
-export const sceneStateMachine = new SceneStateMachineStore();
+export function sceneReducer(state: SceneState, action: SceneAction): SceneState {
+  switch (action.type) {
+    case 'GO_ROOM':
+      return { ...state, camera: 'room', content: 'none' }
+    case 'GO_DESK':
+      return { ...state, camera: 'desk', content: 'none' }
+    case 'OPEN_CONTENT':
+      return { ...state, content: action.content }
+    case 'CLOSE_CONTENT':
+      return { ...state, content: 'none' }
+    case 'OPEN_CREDITS':
+      return { ...state, overlay: 'credits' }
+    case 'CLOSE_CREDITS':
+      return { ...state, overlay: 'none' }
+    case 'TRANSITION_START':
+      return { ...state, isTransitioning: true }
+    case 'TRANSITION_END':
+      return { ...state, isTransitioning: false }
+    case 'ESC':
+      if (state.overlay !== 'none') return { ...state, overlay: 'none' }
+      if (state.content !== 'none') return { ...state, content: 'none' }
+      if (state.camera !== 'room') return { ...state, camera: 'room' }
+      return state
+    default:
+      return state
+  }
+}

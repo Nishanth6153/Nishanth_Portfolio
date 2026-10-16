@@ -1,152 +1,33 @@
-import React from 'react';
-import { ROOM_DIMENSIONS, WINDOW_LAYOUT, PROPS_LAYOUT } from './layout';
-import { getSceneMaterials } from './materials';
+import { wallMat, floorMat } from './materials'
+import { LAYOUT, type BoxSize, type Transform } from './layout'
 
-export const Room: React.FC = () => {
-  const materials = getSceneMaterials();
-  const { width, depth, height, wallThickness, baseboardHeight, baseboardDepth } =
-    ROOM_DIMENSIONS;
-
-  const halfW = width / 2;
-  const halfD = depth / 2;
-
-  // Back wall is segmented around WINDOW_LAYOUT so the exterior city backdrop has a real physical opening
-  const winLeftEdge = WINDOW_LAYOUT.wallCenter[0] - WINDOW_LAYOUT.width / 2;
-  const winRightEdge = WINDOW_LAYOUT.wallCenter[0] + WINDOW_LAYOUT.width / 2;
-  const winBottomEdge = WINDOW_LAYOUT.wallCenter[1] - WINDOW_LAYOUT.height / 2;
-  const winTopEdge = WINDOW_LAYOUT.wallCenter[1] + WINDOW_LAYOUT.height / 2;
-
-  const leftWallSegmentWidth = Math.max(0.1, winLeftEdge - -halfW);
-  const rightWallSegmentWidth = Math.max(0.1, halfW - winRightEdge);
-  const bottomWallSegmentHeight = Math.max(0.1, winBottomEdge);
-  const topWallSegmentHeight = Math.max(0.1, height - winTopEdge);
-
+function WallBlock({ name, transform, size }: { name: string; transform: Transform; size: BoxSize }) {
   return (
-    <group name="room-shell">
-      {/* Wooden Plank Floor */}
-      <mesh
-        position={[0, -0.02, 0]}
-        receiveShadow
-        material={materials.floorWoodPlank}
-      >
-        <boxGeometry args={[width, 0.04, depth]} />
-      </mesh>
+    <mesh name={name} position={transform.position} rotation={transform.rotation} scale={transform.scale} castShadow receiveShadow material={wallMat}>
+      <boxGeometry args={size} />
+    </mesh>
+  )
+}
 
-      {/* Subtle Ceiling */}
-      <mesh
-        position={[0, height + 0.02, 0]}
-        material={materials.ceilingMatte}
-      >
-        <boxGeometry args={[width, 0.04, depth]} />
+export function Room() {
+  const room = LAYOUT.room
+  return (
+    <group name="room-shell" position={room.root.position} rotation={room.root.rotation} scale={room.root.scale}>
+      <mesh name="floor" position={room.floor.transform.position} rotation={room.floor.transform.rotation} scale={room.floor.transform.scale} receiveShadow material={floorMat}>
+        <boxGeometry args={room.floor.size} />
       </mesh>
-
-      {/* Back Wall — Left Pillar */}
-      <mesh
-        position={[
-          -halfW + leftWallSegmentWidth / 2,
-          height / 2,
-          -halfD - wallThickness / 2,
-        ]}
-        receiveShadow
-        material={materials.wallPlaster}
-      >
-        <boxGeometry args={[leftWallSegmentWidth, height, wallThickness]} />
+      <mesh name="ceiling" position={room.ceiling.transform.position} rotation={room.ceiling.transform.rotation} scale={room.ceiling.transform.scale} receiveShadow material={wallMat}>
+        <boxGeometry args={room.ceiling.size} />
       </mesh>
-
-      {/* Back Wall — Right Pillar */}
-      <mesh
-        position={[
-          winRightEdge + rightWallSegmentWidth / 2,
-          height / 2,
-          -halfD - wallThickness / 2,
-        ]}
-        receiveShadow
-        material={materials.wallPlaster}
-      >
-        <boxGeometry args={[rightWallSegmentWidth, height, wallThickness]} />
-      </mesh>
-
-      {/* Back Wall — Below Window Apron */}
-      <mesh
-        position={[
-          WINDOW_LAYOUT.wallCenter[0],
-          bottomWallSegmentHeight / 2,
-          -halfD - wallThickness / 2,
-        ]}
-        receiveShadow
-        material={materials.wallPlaster}
-      >
-        <boxGeometry
-          args={[WINDOW_LAYOUT.width, bottomWallSegmentHeight, wallThickness]}
-        />
-      </mesh>
-
-      {/* Back Wall — Above Window Header */}
-      <mesh
-        position={[
-          WINDOW_LAYOUT.wallCenter[0],
-          winTopEdge + topWallSegmentHeight / 2,
-          -halfD - wallThickness / 2,
-        ]}
-        receiveShadow
-        material={materials.wallPlaster}
-      >
-        <boxGeometry
-          args={[WINDOW_LAYOUT.width, topWallSegmentHeight, wallThickness]}
-        />
-      </mesh>
-
-      {/* Left Wall */}
-      <mesh
-        position={[-halfW - wallThickness / 2, height / 2, 0]}
-        receiveShadow
-        material={materials.wallPlaster}
-      >
-        <boxGeometry args={[wallThickness, height, depth + wallThickness * 2]} />
-      </mesh>
-
-      {/* Right Wall */}
-      <mesh
-        position={[halfW + wallThickness / 2, height / 2, 0]}
-        receiveShadow
-        material={materials.wallPlaster}
-      >
-        <boxGeometry args={[wallThickness, height, depth + wallThickness * 2]} />
-      </mesh>
-
-      {/* Baseboards (Back, Left, Right) */}
-      <mesh
-        position={[0, baseboardHeight / 2, -halfD + baseboardDepth / 2]}
-        receiveShadow
-        material={materials.baseboardWood}
-      >
-        <boxGeometry args={[width, baseboardHeight, baseboardDepth]} />
-      </mesh>
-      <mesh
-        position={[-halfW + baseboardDepth / 2, baseboardHeight / 2, 0]}
-        receiveShadow
-        material={materials.baseboardWood}
-      >
-        <boxGeometry args={[baseboardDepth, baseboardHeight, depth]} />
-      </mesh>
-      <mesh
-        position={[halfW - baseboardDepth / 2, baseboardHeight / 2, 0]}
-        receiveShadow
-        material={materials.baseboardWood}
-      >
-        <boxGeometry args={[baseboardDepth, baseboardHeight, depth]} />
-      </mesh>
-
-      {/* Grounded Area Rug under Desk & Chair */}
-      <mesh
-        position={PROPS_LAYOUT.rug.position}
-        receiveShadow
-        material={materials.rugWoven}
-      >
-        <boxGeometry
-          args={[PROPS_LAYOUT.rug.width, 0.006, PROPS_LAYOUT.rug.depth]}
-        />
+      <WallBlock name="rear-wall-below-window" {...room.walls.rearBelowWindow} />
+      <WallBlock name="rear-wall-above-window" {...room.walls.rearAboveWindow} />
+      <WallBlock name="rear-wall-left-of-window" {...room.walls.rearLeftOfWindow} />
+      <WallBlock name="rear-wall-right-of-window" {...room.walls.rearRightOfWindow} />
+      <WallBlock name="left-wall" {...room.walls.left} />
+      <WallBlock name="right-wall" {...room.walls.right} />
+      <mesh name="rear-baseboard" position={room.rearBaseboard.transform.position} rotation={room.rearBaseboard.transform.rotation} scale={room.rearBaseboard.transform.scale} material={wallMat}>
+        <boxGeometry args={room.rearBaseboard.size} />
       </mesh>
     </group>
-  );
-};
+  )
+}

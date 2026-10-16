@@ -1,499 +1,136 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import * as THREE from 'three';
-import {
-  DESK_LAYOUT,
-  KEYBOARD_LAYOUT,
-  MOUSE_LAYOUT,
-  TOWER_LAYOUT,
-  SPEAKERS_LAYOUT,
-} from './layout';
-import { getSceneMaterials } from './materials';
+import * as THREE from 'three'
+import { RoundedBox } from '@react-three/drei'
+import { CrtScreen } from './CrtScreen'
+import { deskMat, plasticBeigeMat, plasticDarkMat, screenMat, propMat, trimMat } from './materials'
+import { LAYOUT } from './layout'
 
-export const Desk: React.FC = () => {
-  const materials = getSceneMaterials();
-  const lightKeysRef = useRef<THREE.InstancedMesh>(null);
-  const modKeysRef = useRef<THREE.InstancedMesh>(null);
+const ledMat = new THREE.MeshStandardMaterial({ color: '#83a886', emissive: '#59785d', emissiveIntensity: 0.8 })
+const paperMat = new THREE.MeshStandardMaterial({ color: '#b9aa8a', roughness: 0.94 })
+const mugMat = new THREE.MeshStandardMaterial({ color: '#554538', roughness: 0.34, metalness: 0.04 })
+const speakerMat = new THREE.MeshStandardMaterial({ color: '#282729', roughness: 0.68 })
 
-  // Compute physical 104-key layout transforms once for InstancedMesh efficiency
-  const { lightKeyMatrices, modKeyMatrices } = useMemo(() => {
-    const light: THREE.Matrix4[] = [];
-    const mod: THREE.Matrix4[] = [];
-    const dummy = new THREE.Object3D();
-
-    const rows = 5;
-    const cols = 15;
-    const startX = -0.19;
-    const startZ = -0.052;
-    const stepX = 0.0195;
-    const stepZ = 0.021;
-
-    // Function key top row
-    for (let c = 0; c < 13; c++) {
-      if (c === 1 || c === 5 || c === 9) continue;
-      dummy.position.set(startX + c * stepX * 1.12, 0.027, startZ - 0.024);
-      dummy.rotation.set(0.08, 0, 0);
-      dummy.scale.set(1, 1, 0.85);
-      dummy.updateMatrix();
-      if (c === 0 || c >= 9) {
-        mod.push(dummy.matrix.clone());
-      } else {
-        light.push(dummy.matrix.clone());
-      }
-    }
-
-    // Alphanumeric + modifier block
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        // Spacebar row handling
-        if (r === 4 && c >= 4 && c <= 9) {
-          if (c === 6) {
-            dummy.position.set(startX + 6.5 * stepX, 0.021, startZ + r * stepZ);
-            dummy.rotation.set(0.08, 0, 0);
-            dummy.scale.set(5.4, 1, 1);
-            dummy.updateMatrix();
-            light.push(dummy.matrix.clone());
-          }
-          continue;
-        }
-
-        const yHeight = 0.025 - r * 0.0012;
-        dummy.position.set(startX + c * stepX, yHeight, startZ + r * stepZ);
-        dummy.rotation.set(0.08, 0, 0);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-
-        const isModifier = c === 0 || c === cols - 1 || r === 4;
-        if (isModifier) {
-          mod.push(dummy.matrix.clone());
-        } else {
-          light.push(dummy.matrix.clone());
-        }
-      }
-    }
-
-    // Navigation + Numpad right cluster
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < 4; c++) {
-        dummy.position.set(0.125 + c * stepX, 0.025 - r * 0.0012, startZ + r * stepZ);
-        dummy.rotation.set(0.08, 0, 0);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        if (c === 3) {
-          mod.push(dummy.matrix.clone());
-        } else {
-          light.push(dummy.matrix.clone());
-        }
-      }
-    }
-
-    return { lightKeyMatrices: light, modKeyMatrices: mod };
-  }, []);
-
-  useEffect(() => {
-    if (lightKeysRef.current) {
-      lightKeyMatrices.forEach((mat, i) => lightKeysRef.current!.setMatrixAt(i, mat));
-      lightKeysRef.current.instanceMatrix.needsUpdate = true;
-    }
-    if (modKeysRef.current) {
-      modKeyMatrices.forEach((mat, i) => modKeysRef.current!.setMatrixAt(i, mat));
-      modKeysRef.current.instanceMatrix.needsUpdate = true;
-    }
-  }, [lightKeyMatrices, modKeyMatrices]);
-
-  const {
-    position: deskPos,
-    width: deskW,
-    depth: deskD,
-    topHeight,
-    topThickness,
-    apronHeight,
-    legThickness,
-    drawerUnitWidth,
-    drawerUnitDepth,
-  } = DESK_LAYOUT;
-
-  const legHeight = topHeight - topThickness;
+export function Desk() {
+  const desk = LAYOUT.desk
+  const crt = desk.crt
+  const tower = desk.tower
+  const keyboard = desk.keyboard
+  const speaker = desk.speaker
+  const vhs = desk.vhs
+  const mug = desk.mug
+  const notebook = desk.notebook
 
   return (
-    <group name="workstation-desk-and-hardware">
-      {/* ==================== WOODEN DESK STRUCTURE ==================== */}
-      <group position={deskPos}>
-        {/* Main Wood Tabletop */}
-        <mesh
-          position={[0, topHeight - topThickness / 2, 0]}
-          castShadow
-          receiveShadow
-          material={materials.deskWoodTop}
-        >
-          <boxGeometry args={[deskW, topThickness, deskD]} />
-        </mesh>
-
-        {/* Beveled Front & Side Wood Edge Trim */}
-        <mesh
-          position={[0, topHeight - topThickness / 2, deskD / 2 + 0.006]}
-          castShadow
-          receiveShadow
-          material={materials.deskWoodTrim}
-        >
-          <boxGeometry args={[deskW + 0.012, topThickness * 0.92, 0.014]} />
-        </mesh>
-
-        {/* Structural Under-Desk Apron Frame */}
-        <mesh
-          position={[0, topHeight - topThickness - apronHeight / 2, -deskD / 2 + 0.05]}
-          castShadow
-          receiveShadow
-          material={materials.deskDarkMetal}
-        >
-          <boxGeometry args={[deskW - 0.14, apronHeight, 0.03]} />
-        </mesh>
-
-        {/* Left Front & Rear Legs */}
-        <mesh
-          position={[-deskW / 2 + 0.07, legHeight / 2, deskD / 2 - 0.07]}
-          castShadow
-          receiveShadow
-          material={materials.deskDarkMetal}
-        >
-          <boxGeometry args={[legThickness, legHeight, legThickness]} />
-        </mesh>
-        <mesh
-          position={[-deskW / 2 + 0.07, legHeight / 2, -deskD / 2 + 0.07]}
-          castShadow
-          receiveShadow
-          material={materials.deskDarkMetal}
-        >
-          <boxGeometry args={[legThickness, legHeight, legThickness]} />
-        </mesh>
-
-        {/* Left Side Crossbar Stretcher */}
-        <mesh
-          position={[-deskW / 2 + 0.07, 0.16, 0]}
-          castShadow
-          receiveShadow
-          material={materials.deskDarkMetal}
-        >
-          <boxGeometry args={[0.035, 0.035, deskD - 0.14]} />
-        </mesh>
-
-        {/* Right Wooden Drawer Pedestal Unit */}
-        <group position={[deskW / 2 - drawerUnitWidth / 2 - 0.05, legHeight / 2, 0]}>
-          <mesh
-            castShadow
-            receiveShadow
-            material={materials.deskWoodTrim}
-          >
-            <boxGeometry args={[drawerUnitWidth, legHeight, drawerUnitDepth]} />
+    <group name="desk-assembly" position={desk.root.position} rotation={desk.root.rotation} scale={desk.root.scale}>
+      <group name="desk-frame" position={desk.frameRoot.position} rotation={desk.frameRoot.rotation} scale={desk.frameRoot.scale}>
+        <RoundedBox name="desk-top" args={desk.top.size} radius={0.025} smoothness={3} position={desk.top.transform.position} rotation={desk.top.transform.rotation} scale={desk.top.transform.scale} castShadow receiveShadow material={deskMat} />
+        <RoundedBox name="desk-front-apron" args={desk.apron.size} radius={0.018} smoothness={2} position={desk.apron.transform.position} rotation={desk.apron.transform.rotation} scale={desk.apron.transform.scale} castShadow material={deskMat} />
+        {desk.legs.map((leg, index) => (
+          <mesh key={index} name={`desk-leg-${index + 1}`} position={leg.position} rotation={leg.rotation} scale={leg.scale} castShadow material={deskMat}>
+            <boxGeometry args={desk.legSize} />
           </mesh>
-          {/* Three Drawer Front Panels + Brushed Metal Pulls */}
-          {[0.19, 0, -0.19].map((dy, idx) => (
-            <group key={idx} position={[0, dy, drawerUnitDepth / 2 + 0.008]}>
-              <mesh
-                castShadow
-                receiveShadow
-                material={materials.deskWoodTop}
-              >
-                <boxGeometry args={[drawerUnitWidth - 0.03, 0.165, 0.016]} />
-              </mesh>
-              <mesh
-                position={[0, 0, 0.014]}
-                material={materials.brushedSteel}
-              >
-                <boxGeometry args={[0.095, 0.014, 0.014]} />
-              </mesh>
-            </group>
+        ))}
+      </group>
+
+      <group name="computer-assembly" position={desk.computerRoot.position} rotation={desk.computerRoot.rotation} scale={desk.computerRoot.scale}>
+        <group name="crt-monitor-assembly" position={desk.crtRoot.position} rotation={desk.crtRoot.rotation} scale={desk.crtRoot.scale}>
+          <RoundedBox name="crt-housing" args={crt.housing.size} radius={0.055} smoothness={5} position={crt.housing.transform.position} rotation={crt.housing.transform.rotation} scale={crt.housing.transform.scale} castShadow receiveShadow material={plasticBeigeMat} />
+          <RoundedBox name="crt-bezel-inset" args={crt.bezel.size} radius={0.035} smoothness={4} position={crt.bezel.transform.position} rotation={crt.bezel.transform.rotation} scale={crt.bezel.transform.scale} material={plasticDarkMat} />
+          <mesh name="crt-screen-backing" position={crt.backing.transform.position} rotation={crt.backing.transform.rotation} scale={crt.backing.transform.scale} material={screenMat}>
+            <planeGeometry args={crt.backing.size.slice(0, 2) as [number, number]} />
+          </mesh>
+          <CrtScreen width={crt.screenWidth} height={crt.screenHeight} position={crt.screen.transform.position} />
+          <RoundedBox name="crt-control-panel" args={crt.controlPanel.size} radius={0.012} smoothness={3} position={crt.controlPanel.transform.position} rotation={crt.controlPanel.transform.rotation} scale={crt.controlPanel.transform.scale} material={plasticBeigeMat} />
+          {crt.controlButtons.map((button, index) => (
+            <mesh key={index} name={`crt-control-button-${index + 1}`} position={button.position} rotation={button.rotation} scale={button.scale} material={trimMat}>
+              <circleGeometry args={[crt.buttonRadius, 12]} />
+            </mesh>
+          ))}
+          <mesh name="crt-led" position={crt.led.transform.position} rotation={crt.led.transform.rotation} scale={crt.led.transform.scale} material={ledMat}>
+            <circleGeometry args={[crt.led.radius, 12]} />
+          </mesh>
+          <RoundedBox name="crt-stand-neck" args={crt.standNeck.size} radius={0.018} smoothness={3} position={crt.standNeck.transform.position} rotation={crt.standNeck.transform.rotation} scale={crt.standNeck.transform.scale} material={plasticBeigeMat} />
+          <RoundedBox name="crt-stand-foot" args={crt.standFoot.size} radius={0.018} smoothness={3} position={crt.standFoot.transform.position} rotation={crt.standFoot.transform.rotation} scale={crt.standFoot.transform.scale} castShadow material={plasticBeigeMat} />
+          <mesh name="crt-vent-shadow" position={crt.vent.transform.position} rotation={crt.vent.transform.rotation} scale={crt.vent.transform.scale} material={trimMat}>
+            <boxGeometry args={crt.vent.size} />
+          </mesh>
+        </group>
+
+        <group name="computer-tower-assembly" position={desk.towerRoot.position} rotation={desk.towerRoot.rotation} scale={desk.towerRoot.scale}>
+          <RoundedBox name="tower-case" args={tower.case.size} radius={0.038} smoothness={4} position={tower.case.transform.position} rotation={tower.case.transform.rotation} scale={tower.case.transform.scale} castShadow receiveShadow material={plasticBeigeMat} />
+          <RoundedBox name="tower-face" args={tower.face.size} radius={0.018} smoothness={3} position={tower.face.transform.position} rotation={tower.face.transform.rotation} scale={tower.face.transform.scale} material={plasticDarkMat} />
+          <mesh name="tower-drive-bay" position={tower.driveBay.transform.position} rotation={tower.driveBay.transform.rotation} scale={tower.driveBay.transform.scale} material={plasticBeigeMat}>
+            <boxGeometry args={tower.driveBay.size} />
+          </mesh>
+          <mesh name="tower-floppy-slot" position={tower.floppySlot.transform.position} rotation={tower.floppySlot.transform.rotation} scale={tower.floppySlot.transform.scale} material={trimMat}>
+            <boxGeometry args={tower.floppySlot.size} />
+          </mesh>
+          <mesh name="tower-power" position={tower.power.transform.position} rotation={tower.power.transform.rotation} scale={tower.power.transform.scale} material={ledMat}>
+            <circleGeometry args={[tower.power.radius, 12]} />
+          </mesh>
+          {tower.vents.map((vent, index) => (
+            <mesh key={index} name={`tower-vent-${index + 1}`} position={vent.position} rotation={vent.rotation} scale={vent.scale} material={trimMat}>
+              <boxGeometry args={tower.ventSize} />
+            </mesh>
           ))}
         </group>
       </group>
 
-      {/* ==================== RETRO MECHANICAL KEYBOARD ==================== */}
-      <group
-        position={KEYBOARD_LAYOUT.position}
-        rotation={[0, KEYBOARD_LAYOUT.rotationY, 0]}
-        name="retro-keyboard"
-      >
-        {/* Sloped Wedge Keyboard Shell */}
-        <mesh
-          position={[0, 0.012, 0]}
-          rotation={[0.08, 0, 0]}
-          castShadow
-          receiveShadow
-          material={materials.crtBeigePlastic}
-        >
-          <boxGeometry
-            args={[KEYBOARD_LAYOUT.width, 0.022, KEYBOARD_LAYOUT.depth]}
-          />
+      <group name="keyboard-mouse-assembly" position={desk.keyboardRoot.position} rotation={desk.keyboardRoot.rotation} scale={desk.keyboardRoot.scale}>
+        <RoundedBox name="keyboard-shell" args={keyboard.shell.size} radius={0.018} smoothness={3} position={keyboard.shell.transform.position} rotation={keyboard.shell.transform.rotation} scale={keyboard.shell.transform.scale} castShadow receiveShadow material={plasticBeigeMat} />
+        <mesh name="keyboard-keybed" position={keyboard.keybed.transform.position} rotation={keyboard.keybed.transform.rotation} scale={keyboard.keybed.transform.scale} material={plasticDarkMat}>
+          <boxGeometry args={keyboard.keybed.size} />
         </mesh>
-
-        {/* Dark Recessed Keybed Well */}
-        <mesh
-          position={[-0.035, 0.022, 0.002]}
-          rotation={[0.08, 0, 0]}
-          material={materials.crtDarkBeigeRecess}
-        >
-          <boxGeometry args={[0.31, 0.004, 0.125]} />
-        </mesh>
-
-        {/* Instanced Light Alphanumeric Keycaps */}
-        <instancedMesh
-          ref={lightKeysRef}
-          args={[undefined, undefined, lightKeyMatrices.length]}
-          material={materials.keycapLightBeige}
-          castShadow
-          receiveShadow
-        >
-          <boxGeometry args={[0.016, 0.01, 0.016]} />
-        </instancedMesh>
-
-        {/* Instanced Gray Modifier Keycaps */}
-        <instancedMesh
-          ref={modKeysRef}
-          args={[undefined, undefined, modKeyMatrices.length]}
-          material={materials.keycapModifierGray}
-          castShadow
-          receiveShadow
-        >
-          <boxGeometry args={[0.017, 0.01, 0.016]} />
-        </instancedMesh>
-
-        {/* NumLock / CapsLock / ScrollLock Status LEDs */}
-        {[0.14, 0.158, 0.176].map((lx, idx) => (
-          <mesh
-            key={idx}
-            position={[lx, 0.026, -0.062]}
-            material={idx < 2 ? materials.ledGreenOn : materials.crtRearVentPlastic}
-          >
-            <boxGeometry args={[0.008, 0.003, 0.004]} />
+        {Array.from({ length: keyboard.keys.rows }, (_, row) => Array.from({ length: keyboard.keys.columns }, (_, col) => (
+          <mesh key={`${row}-${col}`} name={`keyboard-key-${row + 1}-${col + 1}`} position={[keyboard.keys.firstX + col * keyboard.keys.stepX, keyboard.keys.y, keyboard.keys.firstZ + row * keyboard.keys.stepZ]} material={plasticBeigeMat}>
+            <boxGeometry args={keyboard.keys.size} />
           </mesh>
-        ))}
+        )))}
+        <RoundedBox name="mouse" args={keyboard.mouse.size} radius={keyboard.mouse.radius} smoothness={4} position={keyboard.mouse.transform.position} rotation={keyboard.mouse.transform.rotation} scale={keyboard.mouse.transform.scale} castShadow material={plasticBeigeMat} />
       </group>
 
-      {/* ==================== MOUSE & FABRIC MOUSEPAD ==================== */}
-      <group
-        position={MOUSE_LAYOUT.position}
-        rotation={[0, MOUSE_LAYOUT.rotationY, 0]}
-        name="retro-mouse-and-pad"
-      >
-        {/* Mousepad */}
-        <mesh
-          position={[0, MOUSE_LAYOUT.padThickness / 2, 0]}
-          receiveShadow
-          material={materials.mousePadFabric}
-        >
-          <boxGeometry
-            args={[
-              MOUSE_LAYOUT.padWidth,
-              MOUSE_LAYOUT.padThickness,
-              MOUSE_LAYOUT.padDepth,
-            ]}
-          />
-        </mesh>
-
-        {/* Contoured 2-Button Mouse Body */}
-        <group position={[0, MOUSE_LAYOUT.padThickness, 0.01]}>
-          <mesh
-            position={[0, 0.014, 0]}
-            castShadow
-            receiveShadow
-            material={materials.crtBeigePlastic}
-          >
-            <boxGeometry args={[0.062, 0.028, 0.105]} />
+      <group name="desktop-accessories" position={desk.accessoriesRoot.position} rotation={desk.accessoriesRoot.rotation} scale={desk.accessoriesRoot.scale}>
+        <group name="compact-speaker-assembly" position={desk.speakerRoot.position} rotation={desk.speakerRoot.rotation} scale={desk.speakerRoot.scale}>
+          <RoundedBox name="speaker-cabinet" args={speaker.cabinet.size} radius={0.018} smoothness={3} position={speaker.cabinet.transform.position} rotation={speaker.cabinet.transform.rotation} scale={speaker.cabinet.transform.scale} castShadow material={speakerMat} />
+          <mesh name="speaker-cone" position={speaker.cone.transform.position} rotation={speaker.cone.transform.rotation} scale={speaker.cone.transform.scale} material={propMat}>
+            <circleGeometry args={[speaker.cone.radius, 20]} />
           </mesh>
-          {/* Left & Right Mouse Buttons */}
-          <mesh
-            position={[-0.015, 0.029, -0.026]}
-            material={materials.keycapLightBeige}
-          >
-            <boxGeometry args={[0.026, 0.004, 0.042]} />
-          </mesh>
-          <mesh
-            position={[0.015, 0.029, -0.026]}
-            material={materials.keycapLightBeige}
-          >
-            <boxGeometry args={[0.026, 0.004, 0.042]} />
-          </mesh>
-          {/* Scroll Wheel */}
-          <mesh
-            position={[0, 0.03, -0.026]}
-            rotation={[0, 0, Math.PI / 2]}
-            material={materials.rubberCable}
-          >
-            <cylinderGeometry args={[0.006, 0.006, 0.005, 12]} />
-          </mesh>
-          {/* Mouse Cord Leading Toward Back of Desk */}
-          <mesh
-            position={[0, 0.006, -0.14]}
-            rotation={[Math.PI / 2, 0, 0]}
-            material={materials.rubberCable}
-          >
-            <cylinderGeometry args={[0.0025, 0.0025, 0.19, 8]} />
-          </mesh>
-        </group>
-      </group>
-
-      {/* ==================== LATE-1990s MID-TOWER PC ==================== */}
-      <group
-        position={TOWER_LAYOUT.position}
-        rotation={[0, TOWER_LAYOUT.rotationY, 0]}
-        name="retro-pc-tower"
-      >
-        {/* Main Beige Tower Chassis */}
-        <mesh
-          position={[0, TOWER_LAYOUT.height / 2, 0]}
-          castShadow
-          receiveShadow
-          material={materials.crtBeigePlastic}
-        >
-          <boxGeometry
-            args={[TOWER_LAYOUT.width, TOWER_LAYOUT.height, TOWER_LAYOUT.depth]}
-          />
-        </mesh>
-
-        {/* Stepped Front Bezel */}
-        <mesh
-          position={[0, TOWER_LAYOUT.height / 2, TOWER_LAYOUT.depth / 2 + 0.01]}
-          castShadow
-          receiveShadow
-          material={materials.crtBeigePlastic}
-        >
-          <boxGeometry
-            args={[TOWER_LAYOUT.width - 0.01, TOWER_LAYOUT.height - 0.012, 0.022]}
-          />
-        </mesh>
-
-        {/* Two 5.25" Drive Bays (Top CD-ROM with Eject Button + Blank Bay) */}
-        {[0.34, 0.285].map((by, idx) => (
-          <group
-            key={idx}
-            position={[0, by, TOWER_LAYOUT.depth / 2 + 0.022]}
-          >
-            <mesh material={materials.keycapLightBeige}>
-              <boxGeometry args={[0.155, 0.042, 0.006]} />
-            </mesh>
-            {idx === 0 && (
-              <>
-                <mesh
-                  position={[0, 0.004, 0.004]}
-                  material={materials.crtDarkBeigeRecess}
-                >
-                  <boxGeometry args={[0.13, 0.012, 0.004]} />
-                </mesh>
-                <mesh
-                  position={[0.052, -0.01, 0.005]}
-                  material={materials.keycapModifierGray}
-                >
-                  <boxGeometry args={[0.016, 0.007, 0.004]} />
-                </mesh>
-              </>
-            )}
-          </group>
-        ))}
-
-        {/* 3.5" Floppy Disk Drive Bay */}
-        <group position={[0, 0.22, TOWER_LAYOUT.depth / 2 + 0.022]}>
-          <mesh material={materials.crtDarkBeigeRecess}>
-            <boxGeometry args={[0.108, 0.028, 0.006]} />
-          </mesh>
-          <mesh position={[0, 0.002, 0.004]} material={materials.rubberCable}>
-            <boxGeometry args={[0.088, 0.005, 0.004]} />
-          </mesh>
-          <mesh
-            position={[0.032, -0.007, 0.005]}
-            material={materials.keycapModifierGray}
-          >
-            <boxGeometry args={[0.014, 0.006, 0.005]} />
+          <mesh name="speaker-dust-cap" position={speaker.cap.transform.position} rotation={speaker.cap.transform.rotation} scale={speaker.cap.transform.scale} material={plasticDarkMat}>
+            <circleGeometry args={[speaker.cap.radius, 16]} />
           </mesh>
         </group>
 
-        {/* Power Button, Reset Button & Power/HDD Activity LEDs */}
-        <mesh
-          position={[-0.045, 0.145, TOWER_LAYOUT.depth / 2 + 0.023]}
-          material={materials.keycapModifierGray}
-        >
-          <cylinderGeometry args={[0.012, 0.012, 0.008, 16]} />
-        </mesh>
-        <mesh
-          position={[-0.015, 0.145, TOWER_LAYOUT.depth / 2 + 0.023]}
-          material={materials.crtDarkBeigeRecess}
-        >
-          <cylinderGeometry args={[0.006, 0.006, 0.007, 12]} />
-        </mesh>
-        <mesh
-          position={[0.025, 0.15, TOWER_LAYOUT.depth / 2 + 0.023]}
-          material={materials.ledGreenOn}
-        >
-          <boxGeometry args={[0.008, 0.004, 0.004]} />
-        </mesh>
-        <mesh
-          position={[0.042, 0.15, TOWER_LAYOUT.depth / 2 + 0.023]}
-          material={materials.ledAmberOn}
-        >
-          <boxGeometry args={[0.008, 0.004, 0.004]} />
-        </mesh>
-
-        {/* Lower Front Intake Louvers */}
-        {[0.04, 0.06, 0.08, 0.1].map((vy, i) => (
-          <mesh
-            key={i}
-            position={[0, vy, TOWER_LAYOUT.depth / 2 + 0.022]}
-            material={materials.crtRearVentPlastic}
-          >
-            <boxGeometry args={[0.14, 0.006, 0.005]} />
+        <group name="vhs-stack-assembly" position={desk.vhsRoot.position} rotation={desk.vhsRoot.rotation} scale={desk.vhsRoot.scale}>
+          <mesh name="vhs-stack-base" position={vhs.base.transform.position} rotation={vhs.base.transform.rotation} scale={vhs.base.transform.scale} castShadow material={propMat}>
+            <boxGeometry args={vhs.base.size} />
           </mesh>
-        ))}
-      </group>
+          {vhs.cases.map((item, index) => (
+            <mesh key={index} name={`vhs-case-${index + 1}`} position={item.position} rotation={item.rotation} scale={item.scale} castShadow material={index ? plasticDarkMat : propMat}>
+              <boxGeometry args={vhs.caseSize} />
+            </mesh>
+          ))}
+        </group>
 
-      {/* ==================== STEREO DESKTOP SPEAKERS ==================== */}
-      {(['left', 'right'] as const).map((side) => {
-        const spk = SPEAKERS_LAYOUT[side];
-        return (
-          <group
-            key={side}
-            position={spk.position}
-            rotation={[0, spk.rotationY, 0]}
-            name={`speaker-${side}`}
-          >
-            {/* Speaker Enclosure */}
-            <mesh
-              position={[0, SPEAKERS_LAYOUT.height / 2, 0]}
-              castShadow
-              receiveShadow
-              material={materials.crtBeigePlastic}
-            >
-              <boxGeometry
-                args={[
-                  SPEAKERS_LAYOUT.width,
-                  SPEAKERS_LAYOUT.height,
-                  SPEAKERS_LAYOUT.depth,
-                ]}
-              />
-            </mesh>
-            {/* Acoustic Fabric Front Grille */}
-            <mesh
-              position={[0, SPEAKERS_LAYOUT.height / 2 + 0.01, SPEAKERS_LAYOUT.depth / 2 + 0.003]}
-              material={materials.speakerGrilleFabric}
-            >
-              <boxGeometry
-                args={[
-                  SPEAKERS_LAYOUT.width - 0.016,
-                  SPEAKERS_LAYOUT.height - 0.048,
-                  0.006,
-                ]}
-              />
-            </mesh>
-            {/* Volume Knob on Right Speaker */}
-            {side === 'right' && (
-              <mesh
-                position={[0.02, 0.02, SPEAKERS_LAYOUT.depth / 2 + 0.006]}
-                rotation={[Math.PI / 2, 0, 0]}
-                material={materials.crtDarkBeigeRecess}
-              >
-                <cylinderGeometry args={[0.007, 0.007, 0.008, 12]} />
-              </mesh>
-            )}
-          </group>
-        );
-      })}
+        <group name="coffee-mug-assembly" position={desk.mugRoot.position} rotation={desk.mugRoot.rotation} scale={desk.mugRoot.scale}>
+          <mesh name="coffee-mug-body" position={mug.body.transform.position} rotation={mug.body.transform.rotation} scale={mug.body.transform.scale} castShadow material={mugMat}>
+            <cylinderGeometry args={[mug.body.topRadius, mug.body.bottomRadius, mug.body.height, 20]} />
+          </mesh>
+          <mesh name="mug-rim" position={mug.rim.transform.position} rotation={mug.rim.transform.rotation} scale={mug.rim.transform.scale} material={mugMat}>
+            <torusGeometry args={[mug.rim.radius, mug.rim.tube, 8, 20]} />
+          </mesh>
+          <mesh name="mug-handle" position={mug.handle.transform.position} rotation={mug.handle.transform.rotation} scale={mug.handle.transform.scale} material={mugMat}>
+            <torusGeometry args={[mug.handle.radius, mug.handle.tube, 8, 16]} />
+          </mesh>
+        </group>
+
+        <group name="paper-notebook-assembly" position={desk.notebookRoot.position} rotation={desk.notebookRoot.rotation} scale={desk.notebookRoot.scale}>
+          <mesh name="paper-notebook" position={notebook.pages.transform.position} rotation={notebook.pages.transform.rotation} scale={notebook.pages.transform.scale} receiveShadow material={paperMat}>
+            <planeGeometry args={notebook.pages.size.slice(0, 2) as [number, number]} />
+          </mesh>
+          <mesh name="notebook-cover" position={notebook.cover.transform.position} rotation={notebook.cover.transform.rotation} scale={notebook.cover.transform.scale} material={propMat}>
+            <planeGeometry args={notebook.cover.size.slice(0, 2) as [number, number]} />
+          </mesh>
+        </group>
+      </group>
     </group>
-  );
-};
+  )
+}

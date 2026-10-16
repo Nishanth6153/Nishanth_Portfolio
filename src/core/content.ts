@@ -1,54 +1,39 @@
-export interface CrtDisplayContent {
-  systemHeader: string;
-  biosVersion: string;
-  memoryCheck: string;
-  osBanner: string;
-  statusLines: string[];
-  promptHint: string;
-}
-
-export const PORTFOLIO_CONTENT: CrtDisplayContent = {
-  systemHeader: 'AWARD MODULAR BIOS v4.51PG, An Energy Star Ally',
-  biosVersion: 'Copyright (C) 1998, Workstation Systems Corp.',
-  memoryCheck: '65536K OK  |  VRAM 16MB SGRAM',
-  osBanner: 'WORKSTATION OS // LATE-1990s ENVIRONMENT',
-  statusLines: [
-    'MOUNT /DEV/HDA1 .................... [OK]',
-    'INIT DISPLAY: 17" CRT TRINITRON .... [OK]',
-    'PORTFOLIO MODULES .................. [STANDBY]',
-    'SELECT DESK VIEW OR PRESS [ENTER] TO FOCUS',
-  ],
-  promptHint: 'C:\\PORTFOLIO> _',
-};
+/**
+ * Content model — typed data file for all personal portfolio content.
+ * Per spec §8: managed separately from scene logic.
+ * All fields use clearly marked placeholders until user supplies final details.
+ */
 
 export interface OnlineProfile {
-  label: string;
-  url: string;
-  display: string;
+  label: string
+  url: string
+  display: string
 }
 
 export interface ContentModel {
   identity: {
-    name: string;
-    tagline: string;
-    shortBio: string;
-  };
-  about: string[];
-  profiles: OnlineProfile[];
-  credits: string;
+    name: string
+    tagline: string
+    shortBio: string
+  }
+  about: string[]           // paragraphs
+  profiles: OnlineProfile[]
+  credits: string           // attribution text for third-party assets used
 }
 
 export const CONTENT: ContentModel = {
   identity: {
-    name: 'Late-1990s Workstation Portfolio',
-    tagline: 'Retro Computing & 3D Interactive Environment',
-    shortBio: 'A cinematic 3D room study recreating a late-1990s workstation experience.',
+    name: '[YOUR NAME]',
+    tagline: '[YOUR TAGLINE]',
+    shortBio: '[SHORT INTRODUCTION — one or two sentences.]',
   },
   about: [
-    'An interactive 3D portfolio study built with Three.js, React Three Fiber, and TypeScript.',
+    '[YOUR BIOGRAPHY — replace this paragraph with your own.]',
+    '[SECOND PARAGRAPH — career highlights, current focus, etc.]',
   ],
   profiles: [
-    { label: 'GitHub', url: 'https://github.com', display: 'github.com' },
+    { label: 'GitHub',   url: 'https://github.com/[YOUR_HANDLE]',   display: 'github.com/[YOUR_HANDLE]' },
+    { label: 'LinkedIn', url: 'https://linkedin.com/in/[YOUR_HANDLE]', display: 'linkedin.com/in/[YOUR_HANDLE]' },
   ],
-  credits: 'Designed with procedural textures and authentic period references.',
-};
+  credits: 'Credits for third-party assets will appear here once assets are sourced and licensed.',
+}

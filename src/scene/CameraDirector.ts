@@ -1,51 +1,82 @@
-import { CameraViewMode } from '../core/SceneStateMachine';
+import * as THREE from 'three'
+
+export type PoseName = 'room' | 'desk'
 
 export interface CameraPose {
-  position: [number, number, number];
-  target: [number, number, number];
-  fov: number;
+  target: THREE.Vector3
+  position: THREE.Vector3
+  fov: number
 }
 
-export const CAMERA_PRESETS: Record<
-  CameraViewMode,
-  { desktop: CameraPose; mobilePortrait: CameraPose }
-> = {
-  wide: {
-    // Three-quarter cinematic wide angle: balances left rainy window and center-right desk/CRT
-    desktop: {
-      position: [1.55, 1.68, 1.92],
-      target: [-0.22, 1.06, -1.38],
-      fov: 36,
-    },
-    // Portrait mobile pulls back along the view ray and slightly widens FOV without fish-eye distortion
-    mobilePortrait: {
-      position: [1.95, 1.82, 2.75],
-      target: [-0.18, 1.05, -1.35],
+export const ORBIT_LIMITS = {
+  minPolarAngle: 0.78,
+  maxPolarAngle: 1.82,
+  minAzimuthAngle: -0.82,
+  maxAzimuthAngle: 0.82,
+  minDistance: 1.35,
+  maxDistance: 7.2,
+  dampingFactor: 0.08,
+  rotateSpeed: 0.42,
+  zoomSpeed: 0.65,
+} as const
+
+/** Returns a vertical perspective FOV while capping extreme horizontal spread. */
+export function adaptFov(baseFov: number, aspect: number): number {
+  const safeAspect = Math.max(aspect, 0.35)
+  const base = THREE.MathUtils.degToRad(baseFov)
+  const horizontal = 2 * Math.atan(Math.tan(base / 2) * safeAspect)
+  const desiredHorizontal = Math.min(horizontal, THREE.MathUtils.degToRad(88))
+  return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(desiredHorizontal / 2) / safeAspect))
+}
+
+/** Explicit room landing and desk close-up poses, with a portrait-safe composition. */
+export function buildPoses(aspect = 16 / 9): Record<PoseName, CameraPose> {
+  if (aspect < 0.9) {
+    const roomTarget = new THREE.Vector3(0.05, 1.50, 0)
+    const deskTarget = new THREE.Vector3(0.05, 1.00, -0.12)
+    return {
+      room: {
+        target: roomTarget,
+        position: new THREE.Vector3(0.05, 2.18, 5.46),
+        fov: 50,
+      },
+      desk: {
+        target: deskTarget,
+        position: new THREE.Vector3(0.05, 1.24, 3.40),
+        fov: 54,
+      },
+    }
+  }
+
+  const roomTarget = new THREE.Vector3(0.05, 1.58, 0)
+  const deskTarget = new THREE.Vector3(0.05, 1.02, -0.12)
+  return {
+    room: {
+      target: roomTarget,
+      position: new THREE.Vector3(0.05, 2.02, 4.25),
       fov: 44,
     },
-  },
-  desk: {
-    // Substantial, intimate CRT + keyboard + lamp + tower framing
-    desktop: {
-      position: [0.24, 1.06, -0.42],
-      target: [0.22, 0.91, -1.48],
-      fov: 34,
+    desk: {
+      target: deskTarget,
+      position: new THREE.Vector3(-0.08, 1.24, 1.72),
+      fov: 36,
     },
-    mobilePortrait: {
-      position: [0.24, 1.11, -0.08],
-      target: [0.22, 0.9, -1.45],
-      fov: 41,
-    },
-  },
-};
-
-export function getCameraPoseForViewport(
-  mode: CameraViewMode,
-  aspect: number
-): CameraPose {
-  const presetGroup = CAMERA_PRESETS[mode];
-  if (aspect < 0.95) {
-    return presetGroup.mobilePortrait;
   }
-  return presetGroup.desktop;
 }
+
+export function easeInOutCos(t: number): number {
+  return 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)))
+}
+
+export interface FlyState {
+  fromPos: THREE.Vector3
+  fromTarget: THREE.Vector3
+  toPos: THREE.Vector3
+  toTarget: THREE.Vector3
+  fromFov: number
+  toFov: number
+  elapsed: number
+  duration: number
+}
+
+export const FLY_DURATION = 1.2

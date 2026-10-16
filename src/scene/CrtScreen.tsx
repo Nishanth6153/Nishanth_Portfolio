@@ -1,285 +1,106 @@
-import React, { useMemo } from 'react';
-import * as THREE from 'three';
-import { CRT_LAYOUT } from './layout';
-import { getSceneMaterials } from './materials';
-import { PORTFOLIO_CONTENT } from '../core/content';
+import { useMemo } from 'react'
+import * as THREE from 'three'
 
 interface CrtScreenProps {
-  powered: boolean;
-  onTogglePower?: () => void;
+  width: number
+  height: number
+  position: [number, number, number]
 }
 
-export const CrtScreen: React.FC<CrtScreenProps> = ({ powered, onTogglePower }) => {
-  const materials = getSceneMaterials();
+function makeTerminalTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 640
+  canvas.height = 448
+  const ctx = canvas.getContext('2d')!
 
-  // Crisp late-1990s CRT phosphor terminal texture with scanlines & vignette
-  const screenTexture = useMemo(() => {
-    const width = 1024;
-    const height = 768;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d')!;
+  const background = ctx.createLinearGradient(0, 0, 0, canvas.height)
+  background.addColorStop(0, '#08100d')
+  background.addColorStop(0.55, '#0b1510')
+  background.addColorStop(1, '#060c09')
+  ctx.fillStyle = background
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Deep phosphor background gradient
-    const grad = ctx.createRadialGradient(
-      width * 0.5,
-      height * 0.5,
-      80,
-      width * 0.5,
-      height * 0.5,
-      width * 0.65
-    );
-    grad.addColorStop(0, '#0b221c');
-    grad.addColorStop(0.75, '#061512');
-    grad.addColorStop(1, '#020807');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+  const softGlass = ctx.createRadialGradient(142, 86, 8, 142, 86, 380)
+  softGlass.addColorStop(0, 'rgba(171, 220, 175, 0.09)')
+  softGlass.addColorStop(0.56, 'rgba(129, 177, 137, 0.025)')
+  softGlass.addColorStop(1, 'rgba(5, 12, 8, 0.17)')
+  ctx.fillStyle = softGlass
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Subtle phosphor text glow
-    ctx.shadowColor = 'rgba(72, 255, 168, 0.55)';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#5effb8';
-    ctx.font = 'bold 24px "Courier New", monospace';
+  ctx.textBaseline = 'alphabetic'
+  ctx.font = 'bold 29px "Courier New", monospace'
+  ctx.fillStyle = '#c3e0b8'
+  ctx.fillText('SYSTEM STARTUP', 42, 68)
 
-    ctx.fillText(PORTFOLIO_CONTENT.systemHeader, 54, 72);
-    ctx.font = '20px "Courier New", monospace';
-    ctx.fillStyle = '#3ed896';
-    ctx.fillText(PORTFOLIO_CONTENT.biosVersion, 54, 106);
-    ctx.fillText(PORTFOLIO_CONTENT.memoryCheck, 54, 148);
+  ctx.strokeStyle = 'rgba(153, 190, 147, 0.36)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(42, 90)
+  ctx.lineTo(598, 90)
+  ctx.stroke()
 
-    // Divider bar
-    ctx.fillRect(54, 174, width - 108, 3);
+  ctx.font = '24px "Courier New", monospace'
+  ctx.fillStyle = '#a5d1a2'
+  ctx.fillText('Memory check ........ OK', 42, 144)
+  ctx.fillText('Storage ............. READY', 42, 186)
+  ctx.fillText('Display ............. ONLINE', 42, 228)
+  ctx.fillText('Input device ........ READY', 42, 270)
 
-    // Main OS Banner Box
-    ctx.strokeStyle = '#48ffa8';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(54, 204, width - 108, 76);
-    ctx.font = 'bold 28px "Courier New", monospace';
-    ctx.fillStyle = '#7dffca';
-    ctx.fillText(PORTFOLIO_CONTENT.osBanner, 78, 252);
+  ctx.fillStyle = '#739577'
+  ctx.fillRect(42, 300, 10, 2)
+  ctx.fillRect(59, 300, 10, 2)
+  ctx.fillRect(76, 300, 10, 2)
+  ctx.font = 'bold 28px "Courier New", monospace'
+  ctx.fillStyle = '#d0ecc8'
+  ctx.fillText('READY FOR INPUT', 42, 356)
+  ctx.font = '24px "Courier New", monospace'
+  ctx.fillStyle = '#add2a8'
+  ctx.fillText('C:\\> _', 42, 406)
 
-    // Status lines
-    ctx.font = '22px "Courier New", monospace';
-    ctx.fillStyle = '#4ce8a5';
-    PORTFOLIO_CONTENT.statusLines.forEach((line, idx) => {
-      ctx.fillText(line, 58, 340 + idx * 46);
-    });
+  ctx.fillStyle = 'rgba(2, 6, 4, 0.09)'
+  for (let y = 0; y < canvas.height; y += 4) ctx.fillRect(0, y, canvas.width, 1)
 
-    // Interactive prompt
-    ctx.font = 'bold 26px "Courier New", monospace';
-    ctx.fillStyle = '#88ffd0';
-    ctx.fillText(PORTFOLIO_CONTENT.promptHint, 58, 575);
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.generateMipmaps = true
+  texture.minFilter = THREE.LinearMipmapLinearFilter
+  texture.magFilter = THREE.LinearFilter
+  texture.anisotropy = 4
+  return texture
+}
 
-    // Horizontal CRT Scanlines
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-    for (let y = 0; y < height; y += 4) {
-      ctx.fillRect(0, y, width, 2);
-    }
+function makeCurvedScreenGeometry(width: number, height: number) {
+  const geometry = new THREE.PlaneGeometry(width, height, 24, 18)
+  const positions = geometry.attributes.position as THREE.BufferAttribute
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i) / (width / 2)
+    const y = positions.getY(i) / (height / 2)
+    const radial = x * x * 0.72 + y * y * 0.38
+    positions.setZ(i, -0.006 * radial)
+  }
+  positions.needsUpdate = true
+  geometry.computeVertexNormals()
+  return geometry
+}
 
-    // Rounded CRT corner shadow vignette
-    ctx.strokeStyle = 'rgba(2, 6, 5, 0.85)';
-    ctx.lineWidth = 28;
-    ctx.strokeRect(0, 0, width, height);
+export function CrtScreen({ width, height, position }: CrtScreenProps) {
+  const { geometry, material } = useMemo(() => {
+    const texture = makeTerminalTexture()
+    const geometry = makeCurvedScreenGeometry(width, height)
+    const material = new THREE.MeshPhysicalMaterial({
+      map: texture,
+      emissiveMap: texture,
+      emissive: '#729374',
+      emissiveIntensity: 0.18,
+      roughness: 0.36,
+      metalness: 0.02,
+      clearcoat: 0.2,
+      clearcoatRoughness: 0.34,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    })
+    return { geometry, material }
+  }, [width, height])
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
-    return tex;
-  }, []);
-
-  const screenMaterial = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: powered ? new THREE.Color('#ffffff') : new THREE.Color('#090d0e'),
-      map: powered ? screenTexture : null,
-      emissive: powered ? new THREE.Color('#2cd98b') : new THREE.Color('#000000'),
-      emissiveMap: powered ? screenTexture : null,
-      emissiveIntensity: powered ? 0.78 : 0,
-      roughness: 0.2,
-      metalness: 0.05,
-    });
-  }, [powered, screenTexture]);
-
-  const {
-    position,
-    rotationY,
-    swivelBaseRadius,
-    swivelBaseHeight,
-    neckWidth,
-    neckDepth,
-    neckHeight,
-    bezelWidth,
-    bezelHeight,
-    bezelDepth,
-    rearHousingWidth,
-    rearHousingHeight,
-    rearHousingDepth,
-    screenWidth,
-    screenHeight,
-  } = CRT_LAYOUT;
-
-  const casingCenterY = swivelBaseHeight + neckHeight + bezelHeight / 2;
-  const frameBarW = (bezelWidth - screenWidth) / 2;
-  const frameBarH = (bezelHeight - screenHeight) / 2;
-
-  return (
-    <group
-      position={position}
-      rotation={[0, rotationY, 0]}
-      name="crt-monitor-assembly"
-    >
-      {/* Swivel Tilt Base (Grounded on Desk Surface Y=0 relative to group) */}
-      <mesh
-        position={[0, swivelBaseHeight / 2, 0]}
-        castShadow
-        receiveShadow
-        material={materials.crtDarkBeigeRecess}
-      >
-        <cylinderGeometry
-          args={[swivelBaseRadius * 0.88, swivelBaseRadius, swivelBaseHeight, 28]}
-        />
-      </mesh>
-
-      {/* Monitor Pedestal Neck */}
-      <mesh
-        position={[0, swivelBaseHeight + neckHeight / 2, -0.01]}
-        castShadow
-        receiveShadow
-        material={materials.crtBeigePlastic}
-      >
-        <boxGeometry args={[neckWidth, neckHeight, neckDepth]} />
-      </mesh>
-
-      {/* Main Front Casing Box (Behind the recessed bezel frame) */}
-      <mesh
-        position={[0, casingCenterY, -0.02]}
-        castShadow
-        receiveShadow
-        material={materials.crtBeigePlastic}
-      >
-        <boxGeometry args={[bezelWidth, bezelHeight, bezelDepth]} />
-      </mesh>
-
-      {/* Stepped Front Bezel Frame (Top, Bottom, Left, Right) creating a true recessed screen cavity */}
-      <mesh
-        position={[0, casingCenterY + bezelHeight / 2 - frameBarH / 2, bezelDepth / 2 - 0.005]}
-        castShadow
-        receiveShadow
-        material={materials.crtBeigePlastic}
-      >
-        <boxGeometry args={[bezelWidth, frameBarH, 0.032]} />
-      </mesh>
-      <mesh
-        position={[0, casingCenterY - bezelHeight / 2 + frameBarH / 2, bezelDepth / 2 - 0.005]}
-        castShadow
-        receiveShadow
-        material={materials.crtBeigePlastic}
-      >
-        <boxGeometry args={[bezelWidth, frameBarH, 0.032]} />
-      </mesh>
-      <mesh
-        position={[
-          -bezelWidth / 2 + frameBarW / 2,
-          casingCenterY,
-          bezelDepth / 2 - 0.005,
-        ]}
-        castShadow
-        receiveShadow
-        material={materials.crtBeigePlastic}
-      >
-        <boxGeometry args={[frameBarW, screenHeight, 0.032]} />
-      </mesh>
-      <mesh
-        position={[
-          bezelWidth / 2 - frameBarW / 2,
-          casingCenterY,
-          bezelDepth / 2 - 0.005,
-        ]}
-        castShadow
-        receiveShadow
-        material={materials.crtBeigePlastic}
-      >
-        <boxGeometry args={[frameBarW, screenHeight, 0.032]} />
-      </mesh>
-
-      {/* Inner Dark Bezel Chamfer Collar */}
-      <mesh
-        position={[0, casingCenterY, bezelDepth / 2 - 0.016]}
-        material={materials.crtDarkBeigeRecess}
-      >
-        <planeGeometry args={[screenWidth + 0.016, screenHeight + 0.016]} />
-      </mesh>
-
-      {/* Active Phosphor CRT Screen Plane */}
-      <mesh
-        position={[0, casingCenterY, bezelDepth / 2 - 0.012]}
-        material={screenMaterial}
-      >
-        <planeGeometry args={[screenWidth, screenHeight]} />
-      </mesh>
-
-      {/* Outer Specular Glass Overlay for subtle room/lamp reflection */}
-      <mesh
-        position={[0, casingCenterY, bezelDepth / 2 - 0.008]}
-        material={materials.crtGlassSurface}
-      >
-        <planeGeometry args={[screenWidth, screenHeight]} />
-      </mesh>
-
-      {/* Tapered Rear Cathode Tube Housing */}
-      <mesh
-        position={[0, casingCenterY - 0.01, -bezelDepth / 2 - rearHousingDepth / 2 + 0.02]}
-        castShadow
-        receiveShadow
-        material={materials.crtBeigePlastic}
-      >
-        <boxGeometry
-          args={[rearHousingWidth, rearHousingHeight, rearHousingDepth]}
-        />
-      </mesh>
-
-      {/* Rear Ventilation Slots */}
-      {[-0.08, -0.04, 0, 0.04, 0.08].map((offsetX, i) => (
-        <mesh
-          key={i}
-          position={[
-            offsetX,
-            casingCenterY + rearHousingHeight / 2 + 0.001,
-            -bezelDepth / 2 - rearHousingDepth * 0.45,
-          ]}
-          material={materials.crtRearVentPlastic}
-        >
-          <boxGeometry args={[0.018, 0.003, 0.14]} />
-        </mesh>
-      ))}
-
-      {/* Lower-Right Power Button, LED Indicator & OSD Adjustment Dials */}
-      <mesh
-        position={[0.155, casingCenterY - bezelHeight / 2 + 0.026, bezelDepth / 2 + 0.012]}
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePower?.();
-        }}
-        material={materials.keycapModifierGray}
-      >
-        <boxGeometry args={[0.026, 0.016, 0.012]} />
-      </mesh>
-      <mesh
-        position={[0.125, casingCenterY - bezelHeight / 2 + 0.026, bezelDepth / 2 + 0.012]}
-        material={powered ? materials.ledGreenOn : materials.crtRearVentPlastic}
-      >
-        <sphereGeometry args={[0.0045, 12, 12]} />
-      </mesh>
-      {[-0.04, -0.01, 0.02, 0.05].map((dx, idx) => (
-        <mesh
-          key={idx}
-          position={[dx, casingCenterY - bezelHeight / 2 + 0.024, bezelDepth / 2 + 0.011]}
-          material={materials.crtDarkBeigeRecess}
-        >
-          <boxGeometry args={[0.016, 0.009, 0.008]} />
-        </mesh>
-      ))}
-    </group>
-  );
-};
+  return <mesh name="curved-crt-startup-screen" geometry={geometry} material={material} position={position} />
+}
