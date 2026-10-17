@@ -6,6 +6,9 @@ export default defineConfig({
   server: {
     port: 5173,
     open: false,
+    watch: {
+      ignored: ['**/*.zip', '**/_baseline/**', '**/_argon_rewrite_src/**', '**/evidence/**'],
+    },
   },
   build: {
     target: 'es2022',

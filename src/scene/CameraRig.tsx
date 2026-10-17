@@ -1,128 +1,84 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useThree, useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { gsap } from 'gsap'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { CameraState } from '../core/SceneStateMachine'
-import {
-  adaptFov,
-  buildPoses,
-  easeInOutCos,
-  FLY_DURATION,
-  ORBIT_LIMITS,
-  type FlyState,
-} from './CameraDirector'
+import type { Vec3 } from './layout'
+import { getCameraPose, reducedMotionEnabled } from './CameraDirector'
 
-interface CameraRigProps {
+export function CameraRig({ cameraState, cameraRequestId, focusTarget, onInteraction }: {
   cameraState: CameraState
   cameraRequestId: number
-}
-
-const DRIFT_AMP = 0.0035
-
-export function CameraRig({ cameraState, cameraRequestId }: CameraRigProps) {
+  focusTarget: Vec3 | null
+  onInteraction: () => void
+}) {
   const { camera, size } = useThree()
   const controlsRef = useRef<OrbitControlsImpl>(null!)
-  const flyRef = useRef<FlyState | null>(null)
-  const previousStateRef = useRef<CameraState | null>(null)
-  const previousRequestRef = useRef<number | null>(null)
-  const previousLayoutRef = useRef<string | null>(null)
-  const timeRef = useRef(0)
+  const flightRef = useRef<gsap.core.Timeline | null>(null)
+  const initializedRef = useRef(false)
   const aspect = size.width / Math.max(1, size.height)
-  const poses = useMemo(() => buildPoses(aspect), [aspect])
+  const pose = useMemo(() => getCameraPose(cameraState, aspect, focusTarget), [cameraState, aspect, focusTarget])
 
   useEffect(() => {
-    const pose = poses[cameraState]
     const perspective = camera as THREE.PerspectiveCamera
-    const layoutKey = `${Math.round(size.width)}x${Math.round(size.height)}`
-    const initial = previousStateRef.current === null
-    const layoutChanged = previousLayoutRef.current !== null && previousLayoutRef.current !== layoutKey
-    const stateChanged = previousStateRef.current !== cameraState
-    const requestChanged = previousRequestRef.current !== cameraRequestId
+    const controls = controlsRef.current
+    flightRef.current?.kill()
+    flightRef.current = null
 
-    previousLayoutRef.current = layoutKey
-    previousStateRef.current = cameraState
-    previousRequestRef.current = cameraRequestId
-
-    if (initial) {
+    const setPose = () => {
       camera.position.copy(pose.position)
-      perspective.fov = adaptFov(pose.fov, aspect)
+      camera.lookAt(pose.target)
+      perspective.fov = pose.fov
       perspective.updateProjectionMatrix()
-      if (controlsRef.current) {
-        controlsRef.current.target.copy(pose.target)
-        controlsRef.current.enabled = true
-        controlsRef.current.update()
-      }
-      return
-    }
-
-    if (!layoutChanged && !stateChanged && !requestChanged) return
-
-    const controls = controlsRef.current
-    flyRef.current = {
-      fromPos: camera.position.clone(),
-      fromTarget: controls ? controls.target.clone() : pose.target.clone(),
-      toPos: pose.position.clone(),
-      toTarget: pose.target.clone(),
-      fromFov: perspective.fov,
-      toFov: adaptFov(pose.fov, aspect),
-      elapsed: 0,
-      duration: FLY_DURATION,
-    }
-    if (controls) controls.enabled = false
-  }, [camera, cameraRequestId, cameraState, poses, size.height, size.width, aspect])
-
-  useFrame((_, delta) => {
-    timeRef.current += delta
-    const camera3d = camera as THREE.PerspectiveCamera
-    const controls = controlsRef.current
-    const flight = flyRef.current
-
-    if (flight) {
-      flight.elapsed = Math.min(flight.elapsed + Math.min(delta, 0.05), flight.duration)
-      const progress = easeInOutCos(flight.elapsed / flight.duration)
-      camera.position.lerpVectors(flight.fromPos, flight.toPos, progress)
       if (controls) {
-        controls.target.lerpVectors(flight.fromTarget, flight.toTarget, progress)
+        controls.target.copy(pose.target)
         controls.update()
       }
-      camera3d.fov = flight.fromFov + (flight.toFov - flight.fromFov) * progress
-      camera3d.updateProjectionMatrix()
+    }
 
-      if (flight.elapsed >= flight.duration) {
-        flyRef.current = null
-        if (controls) {
-          controls.enabled = true
-          controls.update()
-        }
-      }
+    if (!initializedRef.current || reducedMotionEnabled()) {
+      setPose()
+      initializedRef.current = true
+      if (controls) controls.enabled = cameraState !== 'monitor'
       return
     }
 
-    if (cameraState === 'room') {
-      const time = timeRef.current
-      camera.position.x += Math.sin(time * 0.23) * DRIFT_AMP * delta
-      camera.position.y += Math.sin(time * 0.31 + 1) * DRIFT_AMP * delta
+    if (controls) controls.enabled = false
+    const timeline = gsap.timeline({ paused: true, onComplete: () => {
+      camera.position.copy(pose.position)
+      if (controls) {
+        controls.target.copy(pose.target)
+        controls.enabled = cameraState !== 'monitor'
+        controls.update()
+      }
+      camera.lookAt(pose.target)
+      flightRef.current = null
+    } })
+    timeline.to(camera.position, { x: pose.position.x, y: pose.position.y, z: pose.position.z, duration: 1.2, ease: 'power2.inOut' }, 0)
+    if (controls) timeline.to(controls.target, { x: pose.target.x, y: pose.target.y, z: pose.target.z, duration: 1.2, ease: 'power2.inOut' }, 0)
+    timeline.to(perspective, { fov: pose.fov, duration: 1.2, ease: 'power2.inOut', onUpdate: () => perspective.updateProjectionMatrix() }, 0)
+    flightRef.current = timeline
+  }, [camera, cameraRequestId, cameraState, pose])
+
+  useFrame((_, delta) => {
+    const timeline = flightRef.current
+    if (timeline) {
+      timeline.totalTime(Math.min(timeline.totalDuration(), timeline.totalTime() + Math.min(delta, 0.05)))
+      camera.lookAt(controlsRef.current?.target ?? pose.target)
+    } else if (cameraState !== 'monitor') {
+      controlsRef.current?.update()
     }
-    if (controls) controls.update()
   })
 
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      enablePan={false}
-      enableZoom
-      enableRotate
-      dampingFactor={ORBIT_LIMITS.dampingFactor}
-      rotateSpeed={ORBIT_LIMITS.rotateSpeed}
-      zoomSpeed={ORBIT_LIMITS.zoomSpeed}
-      minDistance={ORBIT_LIMITS.minDistance}
-      maxDistance={ORBIT_LIMITS.maxDistance}
-      minPolarAngle={ORBIT_LIMITS.minPolarAngle}
-      maxPolarAngle={ORBIT_LIMITS.maxPolarAngle}
-      minAzimuthAngle={ORBIT_LIMITS.minAzimuthAngle}
-      maxAzimuthAngle={ORBIT_LIMITS.maxAzimuthAngle}
-      makeDefault
-    />
-  )
+  useEffect(() => () => { flightRef.current?.kill(); flightRef.current = null }, [])
+
+  return <OrbitControls ref={controlsRef} makeDefault
+    enablePan={false} enableRotate={cameraState !== 'monitor'} enableZoom={cameraState !== 'monitor'}
+    minDistance={0.92} maxDistance={2.14}
+    minAzimuthAngle={-0.48} maxAzimuthAngle={0.48}
+    minPolarAngle={1.12} maxPolarAngle={1.96}
+    dampingFactor={0.08} rotateSpeed={0.46} zoomSpeed={0.62} enableDamping
+    onStart={onInteraction} />
 }
